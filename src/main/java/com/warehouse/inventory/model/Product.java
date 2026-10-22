@@ -16,12 +16,10 @@ public class Product {
     @NotBlank(message = "description must not be blank")
     private String description;
 
-    @Min(value = 0, message = "quantity must be zero or greater")
     @NotNull(message = "quantity is required")
     @Min(value = 0, message = "quantity must be zero or greater")
     private Integer quantity;
 
-    @Min(value = 0, message = "reorderLevel must be zero or greater")
     @NotNull(message = "reorderLevel is required")
     @Min(value = 0, message = "reorderLevel must be zero or greater")
     private Integer reorderLevel;

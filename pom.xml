@@ -14,7 +14,7 @@
     <artifactId>warehouse-inventory-system</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>warehouse-inventory-system</name>
-    <description>Phase 1 warehouse inventory management system</description>
+    <description>Warehouse inventory management system with in-memory stock tracking</description>
 
     <properties>
         <java.version>25</java.version>

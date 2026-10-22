@@ -6,6 +6,7 @@ import org.springframework.stereotype.Repository;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Repository
@@ -31,5 +32,20 @@ public class ProductRepository {
 
     public boolean existsById(int id) {
         return products.containsKey(id);
+    }
+
+    public boolean updateQuantity(int id, int expectedQuantity, int newQuantity) {
+        AtomicBoolean updated = new AtomicBoolean(false);
+        products.computeIfPresent(id, (key, storedProduct) -> {
+            if (storedProduct.getQuantity() != expectedQuantity) {
+                return storedProduct;
+            }
+
+            Product updatedProduct = new Product(storedProduct);
+            updatedProduct.setQuantity(newQuantity);
+            updated.set(true);
+            return updatedProduct;
+        });
+        return updated.get();
     }
 }

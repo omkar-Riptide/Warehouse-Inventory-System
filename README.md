@@ -1,49 +1,61 @@
 # Warehouse Inventory Management System
 
-## Project overview
+## Overview
 
-The Warehouse Inventory Management System is a beginner-friendly Java REST API project. Phase 1 provides the product-management foundation: create a product and retrieve products by list or ID. Products are held in memory while the application runs.
+This college mini-project provides a REST API for maintaining warehouse products, changing stock, viewing inventory movement history, and checking current low-stock alerts. It is a backend-only application. All data lives in memory for the lifetime of the process.
 
-## Problem statement
+## Problem statement and objectives
 
-Warehouses need a consistent way to identify products and see their current quantities and reorder levels. This phase establishes a validated product catalogue through a small HTTP API before stock operations and related tracking are added in a later phase.
+Warehouse teams need a reliable way to identify products, update quantities, review stock changes, and spot items that have fallen below their reorder levels. The project provides a small validated API for those tasks while keeping the data model and storage simple enough to explain in a viva.
 
-## Phase 1 objectives
+Project objectives:
 
-- Start a Spring Boot application on port 8080.
-- Create products with validated fields and unique positive IDs.
-- Retrieve all products in ascending ID order and retrieve one product by ID.
-- Return useful HTTP status codes for successful requests and errors.
-- Keep product storage in a Spring-managed, thread-safe in-memory repository.
+- Manage a product catalogue with unique positive product IDs.
+- Apply validated inward and outward stock changes without allowing negative stock or integer overflow.
+- Record each successful stock change with its type, quantity, timestamp, and before/after quantities.
+- Calculate low-stock alerts from the current shared product data.
+- Keep all data in thread-safe in-memory collections without a database.
 
-## Objectives completed in Phase 1
+## Completed features and limitations
 
-- Implemented `POST /api/products`, `GET /api/products`, and `GET /api/products/{id}`.
-- Added request validation for required fields and numeric ranges.
-- Added atomic duplicate-ID rejection and defensive copies in the repository.
-- Added consistent JSON error messages for validation, unreadable request bodies, and expected HTTP errors.
-- Added repository unit tests and MVC tests for the API behavior described below.
+Completed and covered by automated tests:
+
+- Create products and retrieve all products or one product by ID.
+- Validate product fields and stock operation quantities.
+- Reject duplicate product IDs, unknown stock targets, excessive outward operations, and stock overflow with meaningful status codes.
+- Store movement history in newest-first order and filter it by product.
+- Calculate low-stock alerts dynamically using `quantity < reorderLevel`.
+- Protect stock changes with a synchronized service operation and roll back the quantity if movement recording fails.
+- Keep product storage in one shared `ProductRepository` used by product, stock, movement, and alert features.
+
+Limitations:
+
+- Product and movement data are not persisted. **All data is lost when the application stops or restarts.**
+- There is no authentication, authorization, product update/delete API, frontend, or external database.
+- Stock changes are synchronized in one service instance. This protects concurrent requests in this single-process application, but it is not a distributed lock for multiple application instances.
 
 ## Technology stack
 
-- Java 25 language/runtime target
-- Spring Boot 3.5.16, Spring Web, and Spring Boot Validation
+- Java 25
+- Spring Boot 3.5.16
+- Spring Web and Jakarta Bean Validation
 - Maven
-- JUnit 5 and Spring Boot Test
-- `ConcurrentHashMap` for in-memory product storage
+- Spring Boot Starter Test, JUnit 5, and MockMvc
+- Java `ConcurrentHashMap`, `AtomicLong`, and `synchronized` for in-memory storage and stock coordination
 
-There is no database, ORM, frontend, or third-party persistence layer in this phase.
+No database, JPA, Hibernate, JDBC, ORM, or frontend framework is used.
 
-## System architecture
+## Architecture
 
-- **Controller (`ProductController`)**: maps HTTP requests to repository operations, validates request bodies, and selects response status codes.
-- **Repository (`ProductRepository`)**: owns the only product collection, rejects duplicate IDs atomically, returns sorted snapshots, and copies products at its boundaries.
-- **Model (`Product`)**: represents the five product fields and declares Jakarta Bean Validation rules.
-- **API exception handler (`ApiExceptionHandler`)**: turns validation, malformed JSON, and expected status errors into short JSON messages.
+- **Model:** `Product` is the single product record; `InventoryMovement` and `MovementType` describe completed stock changes; `LowStockAlert` and `StockOperationRequest` are API data shapes.
+- **Repository:** `ProductRepository` owns the only product collection and performs atomic quantity replacement. `MovementRepository` owns movement records and allocates movement IDs safely.
+- **Service:** `StockService` validates and coordinates stock changes and movement recording. `MovementService` records and queries history. `AlertService` calculates alerts from the current product repository contents.
+- **Controller:** product, stock, movement, and alert controllers map HTTP requests to the shared services/repositories.
+- **Exception handling:** `ApiExceptionHandler` returns a short JSON `message` for validation, malformed input, missing products, invalid quantities, and insufficient stock.
 
-Spring constructor injection connects the controller and repository. The application class is in the base package so component scanning discovers these classes.
+Every component uses constructor injection. Stock changes are synchronized by `StockService` across the quantity update and movement write. If movement recording throws a runtime exception, the previous quantity is restored before the error is propagated. Product data is copied at repository boundaries; movement records and alert records are immutable Java records. Movement lists are sorted and returned as snapshots.
 
-## Project directory structure
+## Project structure
 
 ```text
 warehouse-inventory-system/
@@ -55,35 +67,36 @@ warehouse-inventory-system/
     │   ├── java/com/warehouse/inventory/
     │   │   ├── InventorySystemApplication.java
     │   │   ├── controller/
+    │   │   │   ├── AlertController.java
     │   │   │   ├── ApiExceptionHandler.java
-    │   │   │   └── ProductController.java
-    │   │   ├── model/Product.java
-    │   │   └── repository/ProductRepository.java
+    │   │   │   ├── MovementController.java
+    │   │   │   ├── ProductController.java
+    │   │   │   └── StockController.java
+    │   │   ├── exception/
+    │   │   ├── model/
+    │   │   ├── repository/
+    │   │   └── service/
     │   └── resources/application.properties
     └── test/java/com/warehouse/inventory/
         ├── ProductControllerTest.java
-        └── repository/ProductRepositoryTest.java
+        ├── WarehouseApiIntegrationTest.java
+        ├── repository/ProductRepositoryTest.java
+        └── service/
+            ├── AlertServiceTest.java
+            └── StockServiceTest.java
 ```
 
-## Prerequisites
+## Prerequisites and VS Code setup
 
-- Java Development Kit 25 or newer. The Maven compiler targets Java 25.
-- Apache Maven 3.6.3 or newer.
-- Visual Studio Code and the Java Extension Pack are recommended for editing.
+- JDK 25.
+- Apache Maven 3.6.3 or newer (the project was verified with Maven 3.10.0).
+- Visual Studio Code and the Java Extension Pack are recommended.
 
-Check the tools in a terminal with `java -version` and `mvn -version`.
-
-## Open in VS Code
-
-1. Open VS Code and choose **File → Open Folder**.
-2. Select the folder containing this `README.md` and `pom.xml`.
-3. Install or enable the Java Extension Pack if VS Code prompts you.
-4. Allow the Java language server to import the Maven project.
-5. Open a VS Code terminal in the project folder before running the commands below.
+Check installations with `java -version` and `mvn -version`. In VS Code, open the folder containing `pom.xml`, install/enable the Java Extension Pack if prompted, wait for the Maven import to finish, and use the integrated terminal from that project folder.
 
 ## Build, test, and run
 
-Run these commands from the directory containing `pom.xml`:
+Run from the folder containing `pom.xml`:
 
 ```bash
 mvn clean test
@@ -91,134 +104,185 @@ mvn clean package
 mvn spring-boot:run
 ```
 
-The packaged application can also be started with:
+Alternatively, run the packaged application:
 
 ```bash
 java -jar target/warehouse-inventory-system-0.0.1-SNAPSHOT.jar
 ```
 
-The application listens on `http://localhost:8080` by default. Maven downloads the declared dependencies on the first build when they are not already cached.
+The default base URL is `http://localhost:8080`.
 
-## API documentation
+## Product API
 
-Base URL: `http://localhost:8080`
-
-All product JSON property names are camel case and match the Java fields: `id`, `name`, `description`, `quantity`, and `reorderLevel`.
+Product JSON field names are `id`, `name`, `description`, `quantity`, and `reorderLevel`.
 
 ### Create a product
 
 `POST /api/products`
 
-Purpose: add a product with a unique positive ID.
-
-Example request:
-
 ```json
 {
   "id": 101,
   "name": "Keyboard",
   "description": "Wireless keyboard",
-  "quantity": 50,
-  "reorderLevel": 10
+  "quantity": 10,
+  "reorderLevel": 12
 }
 ```
 
-Expected responses:
+Returns `201 Created` and the created product. A duplicate ID returns `409 Conflict`; invalid or missing fields return `400 Bad Request`.
 
-- `201 Created` with the created product as JSON.
-- `400 Bad Request` with a `message` for invalid fields or malformed JSON.
-- `409 Conflict` with a `message` if that product ID already exists.
-
-Representative `201` response:
-
-```json
-{
-  "id": 101,
-  "name": "Keyboard",
-  "description": "Wireless keyboard",
-  "quantity": 50,
-  "reorderLevel": 10
-}
-```
-
-### Retrieve all products
+### List products
 
 `GET /api/products`
 
-Purpose: list products in ascending ID order.
+Returns `200 OK` and a JSON array in ascending product ID order. With no products, returns `[]`.
 
-- `200 OK` with a JSON array.
-- If no products exist, the response body is `[]`.
-
-### Retrieve one product
+### Get a product
 
 `GET /api/products/{id}`
 
-Purpose: retrieve the product with the supplied ID.
+For example, `GET /api/products/101` returns `200 OK` and the product. A non-positive or non-integer ID returns `400`; an unknown positive ID returns `404`.
 
-- `200 OK` with the product JSON when it exists.
-- `400 Bad Request` with a `message` for a non-positive ID or a non-integer path value.
-- `404 Not Found` with a `message` when a positive ID does not exist.
+## Stock API
 
-Example: `GET http://localhost:8080/api/products/101`.
+Both stock operations accept a positive integer quantity and return the updated product with `200 OK`.
 
-## Validation and error behavior
+### Stock inward
 
-- `id` is required and must be greater than zero.
-- `name` and `description` are required and cannot be blank.
-- `quantity` and `reorderLevel` are required and must be zero or greater.
-- A duplicate ID is rejected with HTTP 409; concurrent inserts cannot both claim the same ID.
-- Invalid request bodies and malformed JSON receive HTTP 400 and a JSON body such as `{"message":"..."}`.
-- An unknown positive product ID receives HTTP 404. Error responses do not include stack traces.
+`PUT /api/products/{id}/stock/inward`
 
-## Postman testing instructions
+Example: `PUT /api/products/101/stock/inward`
 
-1. Start the application using `mvn spring-boot:run` and wait for it to report that it started on port 8080.
-2. Create a request with method `POST` and URL `http://localhost:8080/api/products`.
-3. Choose **Body → raw → JSON**, paste the example product request above, and send it. Expect `201`.
-4. Send the same request again. Expect `409` because IDs must be unique.
-5. Send `GET http://localhost:8080/api/products` and `GET http://localhost:8080/api/products/101`. Expect `200` responses.
-6. Try `GET http://localhost:8080/api/products/99999`. Expect `404` unless that ID was created in the current run.
-7. Try a POST with a blank `name`, a missing `description`, `id: 0`, a negative `quantity`, or a negative `reorderLevel`. Expect `400`.
-8. Try malformed JSON such as `{bad json`. Expect `400` with a message.
+```json
+{
+  "quantity": 5
+}
+```
 
-## In-memory storage and known limitations
+If the product had 10 units, the response product has 15 units. A request that would overflow the integer quantity returns `400`. An unknown product returns `404`.
 
-The repository stores products in a thread-safe `ConcurrentHashMap` for the lifetime of the running application. It returns products in predictable ascending ID order and makes defensive copies so callers cannot mutate stored objects through returned references. **All product data is lost when the application stops or restarts.** There is no persistence, authentication, update endpoint, delete endpoint, stock movement, or frontend in Phase 1.
+### Stock outward
 
-## Phase 2 roadmap (planned, not implemented)
+`PUT /api/products/{id}/stock/outward`
 
-The next phase is intended to add:
+Example: `PUT /api/products/101/stock/outward`
 
-- Stock inward through `PUT /api/products/{id}/stock/inward`.
-- Stock outward through `PUT /api/products/{id}/stock/outward`.
-- Validation for stock changes that prevents invalid quantities and negative inventory.
-- Minimal inventory movement records containing the product, movement type, quantity, timestamp, and any other justified fields.
-- All movement history through `GET /api/movements`.
-- Product-specific movement history through `GET /api/movements/product/{productId}`.
-- Low-stock alerts through `GET /api/alerts/low-stock`, using `quantity < reorderLevel`.
-- Integration tests for stock changes, movement recording, and alerts.
-- Updated Postman examples, API documentation, and this README.
+```json
+{
+  "quantity": 3
+}
+```
 
-**Shared-data design rule:** all Phase 2 modules must reuse the same Spring-managed `ProductRepository` and `Product` model. Stock, movement, and alert modules must not create independent copies of inventory data.
+The requested quantity may equal the available quantity, leaving stock at zero. Removing more than is available returns `409 Conflict`; invalid quantities return `400`; an unknown product returns `404`.
 
-Planned four-member division:
+## Movement history API
 
-1. **Member 1:** Product Management.
-2. **Member 2:** Stock Management.
-3. **Member 3:** Movement Tracking.
-4. **Member 4:** Low-Stock Alerts and Integration.
+Each movement response contains `id`, `productId`, `type`, `quantity`, `timestamp`, `quantityBefore`, and `quantityAfter`. Movement quantity is always positive; `type` is `INWARD` or `OUTWARD`. Results are ordered newest first by the generated movement ID.
 
-These are planned Phase 2 responsibilities; none of the Phase 2 endpoints or behaviors are implemented in this project version.
+### List all movements
 
-## Git and GitHub team contribution guidance
+`GET /api/movements`
 
-Git is available for local version control. For a four-member team, agree on a shared branch naming convention, assign each member a focused feature branch, and use pull requests for review before merging to the shared default branch. Keep commits small and descriptive, resolve conflicts together, and run `mvn clean test` before merging. Add a GitHub remote and push only after the team creates and authorizes the repository; this project does not claim that a remote is configured.
+Returns `200 OK` with a JSON array, or `[]` when no stock changes have succeeded.
 
-Suggested initial local commands (review the staged files before committing):
+Example movement:
+
+```json
+{
+  "id": 2,
+  "productId": 101,
+  "type": "OUTWARD",
+  "quantity": 3,
+  "timestamp": "2026-10-22T16:30:00Z",
+  "quantityBefore": 15,
+  "quantityAfter": 12
+}
+```
+
+### List movements for one product
+
+`GET /api/movements/product/{productId}`
+
+Returns `200 OK` with only that product's history. An existing product with no movements returns `[]`; an unknown product returns `404`; a non-positive ID returns `400`.
+
+## Low-stock alerts API
+
+`GET /api/alerts/low-stock`
+
+Returns `200 OK` and a JSON array calculated from current products. Products appear only when `quantity < reorderLevel`; equality is not considered low stock. The response contains `productId`, `productName`, `quantity`, `reorderLevel`, and `message`. No alerts returns `[]`.
+
+Example:
+
+```json
+{
+  "productId": 101,
+  "productName": "Keyboard",
+  "quantity": 7,
+  "reorderLevel": 12,
+  "message": "Low stock: Keyboard has 7 units; reorder level is 12"
+}
+```
+
+## Validation and error responses
+
+- Product ID is required and greater than zero.
+- Product name and description are required and nonblank.
+- Product quantity and reorder level are required and nonnegative.
+- Stock operation quantity is required and greater than zero.
+- Duplicate product IDs return `409`.
+- Missing products return `404`.
+- Invalid stock quantities, malformed JSON, and stock overflow return `400`.
+- Outward quantity above available stock returns `409` and does not alter stock or history.
+
+Errors use the same simple JSON shape, for example:
+
+```json
+{
+  "message": "Product 101 has 7 available; cannot remove 8"
+}
+```
+
+Stack traces and internal implementation details are not returned in these expected error responses.
+
+## Postman testing and demonstration sequence
+
+Set the request base URL to `http://localhost:8080`. For JSON requests, select **Body → raw → JSON**.
+
+1. `POST /api/products` with the sample product above; expect `201`.
+2. `GET /api/products` and `GET /api/products/101`; expect `200` and quantity 10.
+3. `PUT /api/products/101/stock/inward` with `{"quantity":5}`; expect `200` and quantity 15.
+4. `PUT /api/products/101/stock/outward` with `{"quantity":8}`; expect `200` and quantity 7.
+5. `GET /api/movements` and `GET /api/movements/product/101`; expect two records with before/after values 10→15 and 15→7.
+6. `GET /api/alerts/low-stock`; with reorder level 12 and quantity 7, expect one alert.
+7. Repeat the product POST; expect `409` for duplicate ID.
+8. Try stock inward with `{"quantity":0}`, `{"quantity":-1}`, `{}`, or malformed JSON; expect `400`.
+9. Try stock outward with `{"quantity":999}`; expect `409`. Confirm product quantity and movement count did not change.
+10. Try a stock request or product-specific movement request for an unknown ID; expect `404`.
+
+Requests that change data affect only the current app run because storage is in memory. Restarting the application clears products and movements.
+
+## Four-member team plan
+
+This is the suggested division of project responsibility; it does not claim that four people made contributions to this implementation.
+
+1. **Member 1 — Product Management:** `Product`, `ProductRepository`, `ProductController`, and Phase 1 product tests.
+2. **Member 2 — Stock Management:** stock inward/outward behavior, validation, and stock tests.
+3. **Member 3 — Movement Tracking:** movement model, enum, repository, service, controller, and history tests.
+4. **Member 4 — Low-Stock Alerts and Integration:** alert service/controller, cross-module integration tests, README updates, and final verification.
+
+## Git/GitHub collaboration
+
+Use focused feature branches and small descriptive commits. Review changes through pull requests, resolve conflicts with the relevant contributors, and run `mvn clean test` before merging. Configure a remote only after the team has created and authorized the GitHub repository; no remote, commit, or push is claimed here.
+
+Suggested commands after reviewing `git status`:
 
 ```bash
-git status
 git add .
-git commit -m "Create Phase 1 warehouse inventory API"
+git commit -m "Complete Phase 2 inventory operations"
+git push -u origin <branch-name>
 ```
+
+## Future improvements
+
+Possible later work includes durable persistence, authentication and authorization, product update/delete operations, pagination for large histories, and distributed coordination if the service is deployed with multiple instances. These items are not implemented in this phase.
