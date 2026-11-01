@@ -2,33 +2,46 @@ package com.warehouse.inventory.repository;
 
 import com.warehouse.inventory.model.InventoryMovement;
 import com.warehouse.inventory.model.MovementType;
-import org.junit.jupiter.api.BeforeEach;
+import com.warehouse.inventory.model.Product;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 
+import java.time.Instant;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
+@DataJpaTest
 class MovementRepositoryTest {
 
-    private MovementRepository repository;
+    @Autowired
+    private ProductRepository productRepository;
 
-    @BeforeEach
-    void setUp() {
-        repository = new MovementRepository();
-    }
+    @Autowired
+    private MovementRepository movementRepository;
 
     @Test
-    void historyIsAReadOnlySnapshotAndMovementIdsAreUnique() {
-        InventoryMovement first = repository.recordMovement(1, MovementType.INWARD, 3, 2, 5);
-        List<InventoryMovement> snapshot = repository.getAllMovements();
-        InventoryMovement second = repository.recordMovement(1, MovementType.OUTWARD, 1, 5, 4);
+    void persistsMovementsAndReturnsHistoryNewestFirstByProduct() {
+        Product product = productRepository.saveAndFlush(
+                new Product(11, "Tape", "Packing tape", 10, 2));
+        movementRepository.saveAll(List.of(
+                movement(product, MovementType.INWARD, 2, 10, 12),
+                movement(product, MovementType.OUTWARD, 1, 12, 11)));
+        movementRepository.flush();
 
-        assertNotEquals(first.id(), second.id());
-        assertEquals(1, snapshot.size());
-        assertEquals(first, snapshot.getFirst());
-        assertThrows(UnsupportedOperationException.class, () -> snapshot.add(second));
+        List<InventoryMovement> history = movementRepository.findByProduct_IdOrderByIdDesc(11);
+
+        assertEquals(2, history.size());
+        org.junit.jupiter.api.Assertions.assertTrue(history.get(0).getId() > history.get(1).getId());
+        assertEquals(MovementType.OUTWARD, history.get(0).getType());
+        assertEquals(12, history.get(0).getQuantityBefore());
+        assertEquals(11, history.get(0).getQuantityAfter());
+        assertEquals(history.get(0).getId(), movementRepository.findAllByOrderByIdDesc().get(0).getId());
+    }
+
+    private InventoryMovement movement(Product product, MovementType type, int quantity,
+                                       int before, int after) {
+        return new InventoryMovement(product, type, quantity, Instant.now(), before, after);
     }
 }

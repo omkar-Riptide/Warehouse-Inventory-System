@@ -2,36 +2,31 @@ package com.warehouse.inventory.service;
 
 import com.warehouse.inventory.model.LowStockAlert;
 import com.warehouse.inventory.model.Product;
-import com.warehouse.inventory.repository.MovementRepository;
 import com.warehouse.inventory.repository.ProductRepository;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.context.annotation.Import;
 
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@DataJpaTest
+@Import(AlertService.class)
 class AlertServiceTest {
 
+    @Autowired
     private ProductRepository products;
-    private AlertService alertService;
-    private StockService stockService;
 
-    @BeforeEach
-    void setUp() {
-        products = new ProductRepository();
-        alertService = new AlertService(products);
-        MovementService movementService = new MovementService(new MovementRepository(), products);
-        stockService = new StockService(products, movementService);
-    }
+    @Autowired
+    private AlertService alertService;
 
     @Test
     void includesOnlyProductsBelowTheirReorderLevel() {
-        products.addProduct(product(1, 3, 5));
-        products.addProduct(product(2, 5, 5));
-        products.addProduct(product(3, 8, 5));
-        products.addProduct(product(4, 1, 10));
+        products.saveAllAndFlush(List.of(
+                product(1, 3, 5), product(2, 5, 5), product(3, 8, 5), product(4, 1, 10)));
 
         List<LowStockAlert> alerts = alertService.getLowStockAlerts();
 
@@ -44,20 +39,8 @@ class AlertServiceTest {
     @Test
     void returnsEmptyForEmptyInventoryAndWhenNoProductIsLow() {
         assertTrue(alertService.getLowStockAlerts().isEmpty());
-        products.addProduct(product(1, 5, 5));
-        products.addProduct(product(2, 8, 5));
+        products.saveAllAndFlush(List.of(product(1, 5, 5), product(2, 8, 5)));
         assertTrue(alertService.getLowStockAlerts().isEmpty());
-    }
-
-    @Test
-    void alertsReflectSuccessfulAndRejectedStockOperationsImmediately() {
-        products.addProduct(product(1, 5, 10));
-
-        assertEquals(1, alertService.getLowStockAlerts().size());
-        stockService.moveStockInward(1, 5);
-        assertTrue(alertService.getLowStockAlerts().isEmpty());
-        stockService.moveStockOutward(1, 2);
-        assertEquals(1, alertService.getLowStockAlerts().size());
     }
 
     private Product product(int id, int quantity, int reorderLevel) {

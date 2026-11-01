@@ -1,62 +1,52 @@
 package com.warehouse.inventory.repository;
 
 import com.warehouse.inventory.model.Product;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@DataJpaTest
 class ProductRepositoryTest {
 
+    @Autowired
     private ProductRepository repository;
 
-    @BeforeEach
-    void setUp() {
-        repository = new ProductRepository();
-    }
+    @Autowired
+    private TestEntityManager entityManager;
 
     @Test
-    void addsProductAndRejectsDuplicateId() {
-        Product product = product(5);
+    void persistsProductsAndRejectsDuplicateIds() {
+        repository.saveAndFlush(product(5));
 
-        assertTrue(repository.addProduct(product));
-        assertFalse(repository.addProduct(product(5)));
         assertTrue(repository.existsById(5));
+        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+                () -> repository.saveAndFlush(product(5)));
     }
 
     @Test
-    void retrievesExistingProductAsDefensiveCopy() {
-        Product original = product(8);
-        repository.addProduct(original);
+    void retrievesPersistedProductAfterClearingThePersistenceContext() {
+        repository.saveAndFlush(product(8));
+        entityManager.clear();
 
-        Product retrieved = repository.getProductById(8).orElseThrow();
-        assertNotSame(original, retrieved);
-        retrieved.setName("Changed outside repository");
+        Product retrieved = repository.findById(8).orElseThrow();
 
-        assertEquals("Product 8", repository.getProductById(8).orElseThrow().getName());
+        assertEquals("Product 8", retrieved.getName());
+        assertEquals(10, retrieved.getQuantity());
     }
 
     @Test
-    void returnsEmptyForUnknownId() {
-        assertTrue(repository.getProductById(404).isEmpty());
-    }
+    void returnsProductsInAscendingIdOrder() {
+        repository.saveAll(List.of(product(9), product(2), product(4)));
+        repository.flush();
 
-    @Test
-    void returnsProductsInAscendingIdOrderAndSnapshotList() {
-        repository.addProduct(product(9));
-        repository.addProduct(product(2));
-        List<Product> snapshot = repository.getAllProducts();
-
-        repository.addProduct(product(4));
-        assertEquals(List.of(2, 9), snapshot.stream().map(Product::getId).toList());
-        assertEquals(List.of(2, 4, 9), repository.getAllProducts().stream().map(Product::getId).toList());
-        snapshot.get(0).setName("Changed snapshot product");
-        assertEquals("Product 2", repository.getProductById(2).orElseThrow().getName());
+        assertEquals(List.of(2, 4, 9), repository.findAllByOrderByIdAsc().stream()
+                .map(Product::getId).toList());
     }
 
     private Product product(int id) {
