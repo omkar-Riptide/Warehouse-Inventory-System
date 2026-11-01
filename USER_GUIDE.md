@@ -1,34 +1,57 @@
-# How to Use the Warehouse Inventory API
+# Warehouse Inventory User Guide
 
-This guide shows how to start the inventory application and use it from a tool such as Postman. You can also send the same HTTP requests from another program.
+Use the browser dashboard for everyday inventory tasks or call the same endpoints from Postman or another HTTP client.
 
-## 1. Start the application
+## Start the application
 
-Open a terminal in the folder that contains `pom.xml`. Start the API with:
+Start MySQL Server and create the database/account if not already configured:
 
-```bash
+```sql
+CREATE DATABASE warehouse_inventory CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'warehouse_user'@'localhost' IDENTIFIED BY 'REPLACE_WITH_A_STRONG_PASSWORD';
+GRANT ALL PRIVILEGES ON warehouse_inventory.* TO 'warehouse_user'@'localhost';
+```
+
+Then set environment variables in PowerShell and start Spring Boot from the folder containing `pom.xml`:
+
+```powershell
+$env:DB_URL = "jdbc:mysql://localhost:3306/warehouse_inventory"
+$env:DB_USERNAME = "warehouse_user"
+$env:DB_PASSWORD = "your-private-password"
 mvn spring-boot:run
 ```
 
-Wait until Spring Boot reports that it has started. The API is then available at:
+Open [http://localhost:8080/](http://localhost:8080/) in a browser. Data is stored in MySQL and remains available across application restarts as long as the same database is used.
 
-```text
-http://localhost:8080
-```
+## Use the dashboard
 
-Keep the terminal open while using the API. To stop the app, press `Ctrl+C` in that terminal.
+- **Overview:** total products, units in stock, low-stock products, and recorded movements.
+- **Products:** see product ID, name, description, current quantity, reorder level, and stock status. Select **Details** to view an individual product.
+- **Add a product:** enter a unique positive ID, name, description, starting quantity, and reorder level. Quantity and reorder level may be zero.
+- **Update stock:** select a product, choose inward or outward, enter a positive whole-number quantity, and apply the operation. The dashboard refreshes after a successful change.
+- **Movement history:** view all movements or select a product to request only its history. Each record shows type, quantity, timestamp, and before/after stock.
+- **Low-stock alerts:** products appear when `quantity < reorderLevel`; matching rows and alerts are highlighted.
 
-In Postman, create a request, choose its HTTP method, and enter the full URL from the examples below. For requests with a JSON body, choose **Body > raw > JSON**.
+The dashboard displays backend errors, including duplicate IDs and attempts to remove more stock than is available.
 
-## 2. Add a product to inventory
+## REST API reference
 
-Send a `POST` request to:
+Base URL: `http://localhost:8080`
 
-```text
-http://localhost:8080/api/products
-```
+| Method | URL | Purpose |
+|---|---|---|
+| `POST` | `/api/products` | Add a product |
+| `GET` | `/api/products` | List products |
+| `GET` | `/api/products/{id}` | View one product |
+| `PUT` | `/api/products/{id}/stock/inward` | Add stock |
+| `PUT` | `/api/products/{id}/stock/outward` | Remove stock |
+| `GET` | `/api/movements` | View all stock changes |
+| `GET` | `/api/movements/product/{productId}` | View one product's changes |
+| `GET` | `/api/alerts/low-stock` | View low-stock products |
 
-Use a JSON body like this:
+### Example sequence
+
+Create a product with `POST /api/products` and a JSON body:
 
 ```json
 {
@@ -40,121 +63,28 @@ Use a JSON body like this:
 }
 ```
 
-The fields mean:
-
-- `id`: a unique positive number for this product.
-- `name`: the product's name.
-- `description`: a short description.
-- `quantity`: how many units are currently in stock; it can be zero but not negative.
-- `reorderLevel`: the level below which this product should appear in low-stock alerts; it can be zero but not negative.
-
-On success, the API returns `201 Created` and the saved product. Keep the product ID handy because stock changes and product lookup use it. Sending another product with the same ID returns `409 Conflict`.
-
-## 3. Check inventory
-
-To list all products, send:
-
-```text
-GET http://localhost:8080/api/products
-```
-
-To look up one product, send:
-
-```text
-GET http://localhost:8080/api/products/101
-```
-
-The list is ordered by product ID. A product lookup returns `404 Not Found` if that ID has not been added.
-
-## 4. Add more stock (stock inward)
-
-When new units arrive, send a `PUT` request to:
-
-```text
-http://localhost:8080/api/products/101/stock/inward
-```
-
-Body:
+Add five units with `PUT /api/products/101/stock/inward`:
 
 ```json
-{
-  "quantity": 5
-}
+{"quantity": 5}
 ```
 
-The API adds 5 to the product's current quantity and returns the updated product. If product 101 had 10 units, it now has 15. The successful change is also written to movement history as an `INWARD` movement.
-
-## 5. Remove stock (stock outward)
-
-When units are shipped or otherwise removed, send a `PUT` request to:
+Then inspect the product and movement history:
 
 ```text
-http://localhost:8080/api/products/101/stock/outward
+GET /api/products/101
+GET /api/movements/product/101
+GET /api/alerts/low-stock
 ```
 
-Body:
+Each successful stock change records one movement. Creating a product does not create a movement.
 
-```json
-{
-  "quantity": 8
-}
-```
+## Validation and common errors
 
-The API subtracts 8 from the current quantity and returns the updated product. If it had 15 units, it now has 7. The successful change is recorded as an `OUTWARD` movement.
+| Status | Meaning |
+|---|---|
+| `400 Bad Request` | Missing/invalid field, blank name/description, non-positive stock amount, malformed JSON, or invalid ID. |
+| `404 Not Found` | No product exists with the requested ID. |
+| `409 Conflict` | Product ID already exists or requested outward amount exceeds available stock. |
 
-The quantity must be a positive whole number. The API will not allow stock to go below zero: if there are 7 units and you request 8, it returns `409 Conflict`, and neither the quantity nor movement history changes. You may remove all available stock, which leaves the quantity at zero.
-
-## 6. Review stock-change history
-
-To see all successful stock changes, send:
-
-```text
-GET http://localhost:8080/api/movements
-```
-
-To see changes for one product, send:
-
-```text
-GET http://localhost:8080/api/movements/product/101
-```
-
-Each movement includes its ID, product ID, type (`INWARD` or `OUTWARD`), changed quantity, timestamp, quantity before, and quantity after. Results are newest first. Creating a product does not create a movement; movements are created by successful stock inward and outward requests.
-
-## 7. Check low-stock alerts
-
-Send:
-
-```text
-GET http://localhost:8080/api/alerts/low-stock
-```
-
-The response includes products where `quantity < reorderLevel`. For example, a product with 7 units and a reorder level of 12 appears in the response. A product with exactly 12 units and a reorder level of 12 does not. Alerts are calculated from current inventory each time, so an inward or outward operation can change the alert list immediately.
-
-## 8. Complete example sequence
-
-Use these requests in order to see the whole process with product 101:
-
-1. `POST /api/products` with the product JSON in section 2. Expect quantity 10 and status `201`.
-2. `GET /api/products/101`. Confirm the product is present with quantity 10.
-3. `PUT /api/products/101/stock/inward` with `{"quantity":5}`. Confirm the returned quantity is 15.
-4. `PUT /api/products/101/stock/outward` with `{"quantity":8}`. Confirm the returned quantity is 7.
-5. `GET /api/movements/product/101`. Confirm there are two changes: inward from 10 to 15 and outward from 15 to 7, newest first.
-6. `GET /api/alerts/low-stock`. Confirm the keyboard appears because 7 is below its reorder level of 12.
-7. Try `PUT /api/products/101/stock/outward` with `{"quantity":8}`. Expect `409 Conflict`; the quantity stays at 7 and no movement is added.
-
-For a product with a different ID, replace `101` in the URLs with that product's ID.
-
-## 9. Common errors
-
-The API returns an HTTP status and a JSON body with a `message` explaining expected errors.
-
-| Status | Typical reason | What to do |
-|---|---|---|
-| `400 Bad Request` | Missing or invalid fields, blank name/description, nonpositive stock quantity, malformed JSON, or a decimal used where a whole number is expected. | Check the request URL and JSON body. Product quantity and reorder level may be zero; stock-change quantity must be greater than zero. |
-| `404 Not Found` | The product ID has not been added. | Create the product first, then use its ID. |
-| `409 Conflict` | The product ID already exists, or an outward change asks for more units than are available. | Choose a new ID for a new product, or reduce the outward quantity. |
-
-## 10. Data lifetime
-
-The application stores products and movements in memory. They are available while the current app process is running, but are erased when it stops or restarts. Add the products again after restarting. The project does not currently save inventory to a file or database.
-
+Errors have a JSON `message` field. An outward operation cannot make stock negative; a rejected request leaves both quantity and movement history unchanged. Product IDs must be positive integers, and product names/descriptions have maximum lengths of 150/1000 characters.

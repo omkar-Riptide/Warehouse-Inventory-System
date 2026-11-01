@@ -1,7 +1,7 @@
 package com.warehouse.inventory.controller;
 
 import com.warehouse.inventory.model.Product;
-import com.warehouse.inventory.repository.ProductRepository;
+import com.warehouse.inventory.service.ProductService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,25 +19,21 @@ import java.util.List;
 @RequestMapping("/api/products")
 public class ProductController {
 
-    private final ProductRepository productRepository;
+    private final ProductService productService;
 
-    public ProductController(ProductRepository productRepository) {
-        this.productRepository = productRepository;
+    public ProductController(ProductService productService) {
+        this.productService = productService;
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public Product createProduct(@Valid @RequestBody Product product) {
-        if (!productRepository.addProduct(product)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "A product with ID " + product.getId() + " already exists");
-        }
-        return productRepository.getProductById(product.getId()).orElseThrow();
+        return productService.createProduct(product);
     }
 
     @GetMapping
     public List<Product> getAllProducts() {
-        return productRepository.getAllProducts();
+        return productService.getAllProducts();
     }
 
     @GetMapping("/{id}")
@@ -45,8 +41,6 @@ public class ProductController {
         if (id <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "id must be greater than zero");
         }
-        return productRepository.getProductById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Product with ID " + id + " was not found"));
+        return productService.getProductById(id);
     }
 }

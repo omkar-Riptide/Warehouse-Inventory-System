@@ -1,6 +1,7 @@
 package com.warehouse.inventory.controller;
 
 import com.warehouse.inventory.exception.InsufficientStockException;
+import com.warehouse.inventory.exception.DuplicateProductException;
 import com.warehouse.inventory.exception.InvalidStockOperationException;
 import com.warehouse.inventory.exception.ProductNotFoundException;
 import org.springframework.http.HttpStatus;
@@ -55,6 +56,11 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(InsufficientStockException.class)
     public ResponseEntity<Map<String, String>> handleInsufficientStock(InsufficientStockException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", exception.getMessage()));
+    }
+
+    @ExceptionHandler(DuplicateProductException.class)
+    public ResponseEntity<Map<String, String>> handleDuplicateProduct(DuplicateProductException exception) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", exception.getMessage()));
     }
 }

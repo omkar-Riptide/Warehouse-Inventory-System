@@ -1,20 +1,21 @@
 package com.warehouse.inventory;
 
 import com.warehouse.inventory.controller.ApiExceptionHandler;
+import com.warehouse.inventory.controller.ProductController;
+import com.warehouse.inventory.exception.DuplicateProductException;
+import com.warehouse.inventory.exception.ProductNotFoundException;
 import com.warehouse.inventory.model.Product;
-import com.warehouse.inventory.repository.ProductRepository;
+import com.warehouse.inventory.service.ProductService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import com.warehouse.inventory.controller.ProductController;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
-import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -31,19 +32,18 @@ class ProductControllerTest {
     private MockMvc mockMvc;
 
     @MockitoBean
-    private ProductRepository productRepository;
+    private ProductService productService;
 
     @BeforeEach
     void setUp() {
-        when(productRepository.getAllProducts()).thenReturn(List.of());
-        when(productRepository.getProductById(any(Integer.class))).thenReturn(Optional.empty());
-        when(productRepository.addProduct(any(Product.class))).thenReturn(true);
+        when(productService.getAllProducts()).thenReturn(List.of());
+        when(productService.createProduct(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(productService.getProductById(101)).thenReturn(product(101));
+        when(productService.getProductById(404)).thenThrow(new ProductNotFoundException(404));
     }
 
     @Test
     void createsValidProductWithCreatedStatus() throws Exception {
-        when(productRepository.getProductById(101)).thenReturn(Optional.of(product(101)));
-
         mockMvc.perform(post("/api/products").contentType(MediaType.APPLICATION_JSON)
                         .content(validJson(101)))
                 .andExpect(status().isCreated())
@@ -53,7 +53,7 @@ class ProductControllerTest {
     }
 
     @Test
-    void listsProductsAndReturnsEmptyArrayWhenRepositoryIsEmpty() throws Exception {
+    void listsProductsAndReturnsEmptyArrayWhenServiceIsEmpty() throws Exception {
         mockMvc.perform(get("/api/products"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
@@ -62,7 +62,7 @@ class ProductControllerTest {
 
     @Test
     void listsExistingProducts() throws Exception {
-        when(productRepository.getAllProducts()).thenReturn(List.of(product(101)));
+        when(productService.getAllProducts()).thenReturn(List.of(product(101)));
 
         mockMvc.perform(get("/api/products"))
                 .andExpect(status().isOk())
@@ -72,8 +72,6 @@ class ProductControllerTest {
 
     @Test
     void retrievesExistingProduct() throws Exception {
-        when(productRepository.getProductById(101)).thenReturn(Optional.of(product(101)));
-
         mockMvc.perform(get("/api/products/101"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(101));
@@ -88,7 +86,7 @@ class ProductControllerTest {
 
     @Test
     void duplicateProductReturnsConflict() throws Exception {
-        when(productRepository.addProduct(any(Product.class))).thenReturn(false);
+        when(productService.createProduct(any(Product.class))).thenThrow(new DuplicateProductException(101));
 
         mockMvc.perform(post("/api/products").contentType(MediaType.APPLICATION_JSON)
                         .content(validJson(101)))

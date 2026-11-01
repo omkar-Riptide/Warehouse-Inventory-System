@@ -3,11 +3,11 @@ package com.warehouse.inventory.service;
 import com.warehouse.inventory.exception.InsufficientStockException;
 import com.warehouse.inventory.exception.InvalidStockOperationException;
 import com.warehouse.inventory.exception.ProductNotFoundException;
-import com.warehouse.inventory.model.InventoryMovement;
 import com.warehouse.inventory.model.MovementType;
 import com.warehouse.inventory.model.Product;
 import com.warehouse.inventory.repository.ProductRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class StockService {
@@ -20,11 +20,13 @@ public class StockService {
         this.movementService = movementService;
     }
 
-    public synchronized Product moveStockInward(int productId, int quantity) {
+    @Transactional
+    public Product moveStockInward(int productId, int quantity) {
         return changeStock(productId, quantity, MovementType.INWARD);
     }
 
-    public synchronized Product moveStockOutward(int productId, int quantity) {
+    @Transactional
+    public Product moveStockOutward(int productId, int quantity) {
         return changeStock(productId, quantity, MovementType.OUTWARD);
     }
 
@@ -36,7 +38,7 @@ public class StockService {
             throw new InvalidStockOperationException("quantity must be greater than zero");
         }
 
-        Product current = productRepository.getProductById(productId)
+        Product current = productRepository.findByIdForUpdate(productId)
                 .orElseThrow(() -> new ProductNotFoundException(productId));
         int before = current.getQuantity();
         int after;
@@ -53,21 +55,8 @@ public class StockService {
             after = before - quantity;
         }
 
-        if (!productRepository.updateQuantity(productId, before, after)) {
-            throw new IllegalStateException("Product stock changed unexpectedly during the operation");
-        }
-
-        try {
-            movementService.recordMovement(productId, type, quantity, before, after);
-        } catch (RuntimeException exception) {
-            boolean rolledBack = productRepository.updateQuantity(productId, after, before);
-            if (!rolledBack) {
-                throw new IllegalStateException("Movement recording failed and stock rollback was unsuccessful", exception);
-            }
-            throw exception;
-        }
-
-        return productRepository.getProductById(productId)
-                .orElseThrow(() -> new ProductNotFoundException(productId));
+        current.setQuantity(after);
+        movementService.recordMovement(current, type, quantity, before, after);
+        return current;
     }
 }

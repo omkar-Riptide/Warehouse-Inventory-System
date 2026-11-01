@@ -1,6 +1,6 @@
 package com.warehouse.inventory.controller;
 
-import com.warehouse.inventory.model.InventoryMovement;
+import com.warehouse.inventory.model.MovementResponse;
 import com.warehouse.inventory.service.MovementService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,12 +20,12 @@ public class MovementController {
     }
 
     @GetMapping
-    public List<InventoryMovement> getAllMovements() {
+    public List<MovementResponse> getAllMovements() {
         return movementService.getAllMovements();
     }
 
     @GetMapping("/product/{productId}")
-    public List<InventoryMovement> getMovementsForProduct(@PathVariable int productId) {
+    public List<MovementResponse> getMovementsForProduct(@PathVariable int productId) {
         return movementService.getMovementsForProduct(productId);
     }
 }

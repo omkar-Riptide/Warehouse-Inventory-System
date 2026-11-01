@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#102a43">
+  <title>Warehouse Inventory</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/script.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Warehouse Inventory home">
+      <span class="brand-mark" aria-hidden="true">W</span>
+      <span>Warehouse<span class="brand-light">Inventory</span></span>
+    </a>
+    <nav aria-label="Main navigation">
+      <a href="#overview">Overview</a>
+      <a href="#products">Products</a>
+      <a href="#stock">Stock operations</a>
+      <a href="#history">Movement history</a>
+    </nav>
+    <div class="connection"><span class="connection-dot"></span> Live inventory</div>
+  </header>
+
+  <main class="page">
+    <section class="page-heading" id="overview">
+      <div>
+        <p class="eyebrow">WAREHOUSE OPERATIONS</p>
+        <h1>Inventory overview</h1>
+        <p class="subheading">A clear view of your products, stock levels, and recent activity.</p>
+      </div>
+      <button class="button button-primary" type="button" id="refresh-button">Refresh data</button>
+    </section>
+
+    <div id="feedback" class="feedback" role="status" aria-live="polite" hidden></div>
+
+    <section class="stats-grid" aria-label="Inventory statistics">
+      <article class="stat-card">
+        <span class="stat-icon icon-blue" aria-hidden="true">▦</span>
+        <div><p>Total products</p><strong id="total-products">—</strong><small>Active product records</small></div>
+      </article>
+      <article class="stat-card">
+        <span class="stat-icon icon-green" aria-hidden="true">↗</span>
+        <div><p>Units in stock</p><strong id="total-quantity">—</strong><small>Across all products</small></div>
+      </article>
+      <article class="stat-card">
+        <span class="stat-icon icon-amber" aria-hidden="true">!</span>
+        <div><p>Low-stock products</p><strong id="low-stock-count">—</strong><small>Below reorder level</small></div>
+      </article>
+      <article class="stat-card">
+        <span class="stat-icon icon-violet" aria-hidden="true">↔</span>
+        <div><p>Recorded movements</p><strong id="movement-count">—</strong><small>Successful stock changes</small></div>
+      </article>
+    </section>
+
+    <section class="panel" id="products">
+      <div class="section-heading">
+        <div><p class="eyebrow">CATALOGUE</p><h2>Products</h2></div>
+        <span class="muted" id="product-count-label">Loading products…</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Product</th><th>Description</th><th>Quantity</th><th>Reorder level</th><th>Status</th><th></th></tr></thead>
+          <tbody id="products-table"><tr><td colspan="6" class="empty-state">Loading products…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="two-column">
+      <section class="panel" aria-labelledby="add-product-heading">
+        <div class="section-heading">
+          <div><p class="eyebrow">CATALOGUE</p><h2 id="add-product-heading">Add a product</h2></div>
+        </div>
+        <form id="product-form" class="form-grid">
+          <label>Product ID<input name="id" type="number" min="1" step="1" required placeholder="e.g. 101"></label>
+          <label>Product name<input name="name" type="text" maxlength="150" required placeholder="e.g. Shipping boxes"></label>
+          <label class="field-wide">Description<input name="description" type="text" maxlength="1000" required placeholder="Short product description"></label>
+          <label>Starting quantity<input name="quantity" type="number" min="0" step="1" required value="0"></label>
+          <label>Reorder level<input name="reorderLevel" type="number" min="0" step="1" required value="0"></label>
+          <button class="button button-primary field-wide" type="submit">Add product</button>
+        </form>
+      </section>
+
+      <section class="panel" id="stock" aria-labelledby="stock-heading">
+        <div class="section-heading">
+          <div><p class="eyebrow">STOCK CONTROL</p><h2 id="stock-heading">Update stock</h2></div>
+        </div>
+        <form id="stock-form" class="form-grid">
+          <label class="field-wide">Product<select name="productId" required><option value="">Select a product</option></select></label>
+          <label>Operation<select name="operation"><option value="inward">Stock inward</option><option value="outward">Stock outward</option></select></label>
+          <label>Quantity<input name="quantity" type="number" min="1" step="1" required placeholder="Enter units"></label>
+          <button class="button button-primary field-wide" type="submit">Apply stock change</button>
+        </form>
+      </section>
+    </div>
+
+    <div class="two-column lower-grid">
+      <section class="panel" aria-labelledby="alerts-heading">
+        <div class="section-heading">
+          <div><p class="eyebrow">REPLENISHMENT</p><h2 id="alerts-heading">Low-stock alerts</h2></div>
+          <span class="badge badge-warning" id="alert-count">0 alerts</span>
+        </div>
+        <div id="alerts-list" class="alert-list"><p class="empty-state">Loading alerts…</p></div>
+      </section>
+
+      <section class="panel" id="history" aria-labelledby="history-heading">
+        <div class="section-heading movement-heading">
+          <div><p class="eyebrow">AUDIT TRAIL</p><h2 id="history-heading">Movement history</h2></div>
+          <label class="filter-label">Product
+            <select id="movement-filter"><option value="">All products</option></select>
+          </label>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Movement</th><th>Type</th><th>Quantity</th><th>Stock change</th><th>Timestamp</th></tr></thead>
+            <tbody id="movements-table"><tr><td colspan="5" class="empty-state">Loading movements…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <dialog id="product-dialog" class="product-dialog">
+    <div class="dialog-heading">
+      <div><p class="eyebrow">PRODUCT DETAILS</p><h2 id="dialog-product-name"></h2></div>
+      <button class="icon-button" id="close-dialog" type="button" aria-label="Close product details">×</button>
+    </div>
+    <dl id="product-details" class="details-grid"></dl>
+  </dialog>
+
+  <footer><span>Warehouse Inventory Management</span><span>Inventory stays in sync with the warehouse database.</span></footer>
+</body>
+</html>

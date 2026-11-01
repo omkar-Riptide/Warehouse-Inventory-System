@@ -17,7 +17,7 @@ public class AlertService {
     }
 
     public List<LowStockAlert> getLowStockAlerts() {
-        return productRepository.getAllProducts().stream()
+        return productRepository.findAllByOrderByIdAsc().stream()
                 .filter(product -> product.getQuantity() < product.getReorderLevel())
                 .map(this::toAlert)
                 .toList();

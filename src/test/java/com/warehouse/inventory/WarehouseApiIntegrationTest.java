@@ -9,10 +9,13 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.forwardedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -26,6 +29,22 @@ class WarehouseApiIntegrationTest {
     private ProductRepository productRepository;
 
     @Test
+    void servesDashboardAtRootAndKeepsStaticAssetsAvailable() throws Exception {
+        mockMvc.perform(get("/"))
+                .andExpect(status().isOk())
+                .andExpect(forwardedUrl("index.html"));
+        mockMvc.perform(get("/index.html"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Inventory overview")));
+        mockMvc.perform(get("/script.js"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("/api/products")));
+        mockMvc.perform(get("/style.css"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(".stats-grid")));
+    }
+
+    @Test
     void productStockMovementsAndAlertsStayInSyncAcrossTheApi() throws Exception {
         mockMvc.perform(get("/api/movements"))
                 .andExpect(status().isOk())
@@ -35,6 +54,11 @@ class WarehouseApiIntegrationTest {
                         .content(productJson(201, 10, 12)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.quantity").value(10));
+
+        mockMvc.perform(post("/api/products").contentType(MediaType.APPLICATION_JSON)
+                        .content(productJson(201, 10, 12)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("A product with ID 201 already exists"));
 
         mockMvc.perform(get("/api/movements/product/201"))
                 .andExpect(status().isOk())
@@ -115,7 +139,7 @@ class WarehouseApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(2)));
 
-        productRepository.addProduct(new Product(202, "Maximum", "At integer limit", Integer.MAX_VALUE, 0));
+        productRepository.saveAndFlush(new Product(202, "Maximum", "At integer limit", Integer.MAX_VALUE, 0));
         mockMvc.perform(put("/api/products/202/stock/inward").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"quantity\":1}"))
                 .andExpect(status().isBadRequest());
